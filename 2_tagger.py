@@ -2,7 +2,7 @@ import os
 import sys
 import re
 from email.utils import parsedate_to_datetime
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
 from mutagen.easyid3 import EasyID3
 from mutagen.id3 import ID3, TDRC, TRCK
@@ -26,11 +26,20 @@ def fetch_playlist_data(url):
     channel_title = ""
 
     try:
-        with urlopen(url, timeout=30) as response:
+        # Substack may reject urllib's default Python user agent with HTTP 403.
+        request = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                "Accept": "application/rss+xml, application/xml, text/xml, */*",
+            },
+        )
+        with urlopen(request, timeout=30) as response:
             xml_content = response.read()
     except Exception as e:
         print(f"Failed to fetch feed {url}: {e}")
-        return title_map
+        return title_map, channel_title
 
     try:
         root = ET.fromstring(xml_content)
@@ -159,4 +168,7 @@ if __name__ == "__main__":
 
     print("Fetching playlist metadata...")
     title_map, feed_title = fetch_playlist_data(playlist_url)
+    if not title_map:
+        print("No episode metadata was retrieved; tagging was stopped to avoid leaving files untagged.")
+        sys.exit(1)
     process_year_subfolder(top_level_folder, year_folder, title_map)
